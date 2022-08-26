@@ -3,7 +3,7 @@
 the script is used for cleaning target files in an archive file, or a nested archive file (archive files inside archive file)
 it's useful for oss cleaning
 
-###inputs:
+### inputs:
 <li>a csv file:
 
 | Package      | Description | Type        | Target      |
@@ -16,7 +16,7 @@ it's useful for oss cleaning
 
 pip 21.0.1.zip
 
-###usage:
+### usage:
     python oss_clearing.py <path_to_your_package> <path_to_your_csv>
 
 example:
@@ -25,11 +25,11 @@ example:
 
 when done, an archive file with same name that ending with "-done" will be generated at same directory of your input package
 
-###supported format:
+### supported format:
 
 <li>.zip
 <li>.tar.gz
 <li>.tar.xz
 
-###unsupported format:
+### unsupported format:
 <li>.tar.lzma
