@@ -1,8 +1,12 @@
 import shutil
 import os
 import sys
+import tarfile
+import zipfile
 
-SUPPORT_FORMAT = ['.zip', '.tar.gz', '.tar.xz']
+import numpy as np
+
+SUPPORT_FORMAT = ['.zip', '.tar.gz', '.tar.xz', '.tar', '.npz', '.whl']
 UNSUPPORTED_FORMAT = ['.tar.lzma']
 
 
@@ -18,6 +22,7 @@ class Archive:
         target_path = os.path.join(base, file_path)
         try:
             os.remove(target_path)
+            # print(f'successfully remove file: {target_path}')
         except Exception:
             print(f"Cannot found file: {target_path}")
 
@@ -38,9 +43,9 @@ class Archive:
         """ set package path """
         self._pkg_path = path
 
-    def _pack(self, base_dir):
+    def _pack(self, bd):
         """ helper method to pack the archive"""
-        pth = os.path.join(base_dir, self._cwd)
+        pth = os.path.join(bd, self._cwd)
         base_path = pth
         if self._is_root_node:
             base_path = base_path[:-1] + '-done'
@@ -56,10 +61,34 @@ class Archive:
             shutil.make_archive(base_name=base_path,
                                 format='xztar',
                                 root_dir=pth)
+        if self._type == SUPPORT_FORMAT[3]:
+            shutil.make_archive(base_name=base_path,
+                                format='tar',
+                                root_dir=pth)
+        if self._type == SUPPORT_FORMAT[5]:
+            shutil.make_archive(base_name=base_path,
+                                format='zip',
+                                root_dir=pth)
+            os.rename(pth + '.zip', pth + '.whl')
         # remove the uncompressed folder
         shutil.rmtree(pth)
 
-    def process(self, base_dir):
+    def _unpack(self, bd):
+        try:
+            if self._pkg_path.split('.')[-1] == 'tar':
+                with tarfile.open(os.path.join(bd, self._pkg_path)) as tar:
+                    tar.extractall(os.path.join(bd, self._cwd))
+            elif self._type == '.whl':
+                # print(os.path.join(bd, self._pkg_path))
+                # print(os.path.join(bd, self._pkg_path)[:-4] + '.zip')
+                os.rename(os.path.join(bd, self._pkg_path), os.path.join(bd, self._pkg_path)[:-4] + '.zip')
+            else:
+                shutil.unpack_archive(os.path.join(bd, self._pkg_path),
+                                      os.path.join(bd, self._cwd))  # os.path.dirname(self._cwd)
+        except Exception as e:
+            print(f'uncompress issue[{e.winerror}]:{e.strerror}')
+
+    def process(self, bd):
         """
         process the Archive tree, DFS - style
         for each Archive node, do following:
@@ -69,17 +98,50 @@ class Archive:
         :param base_dir: base directory of the root node
         :return:
         """
-        shutil.unpack_archive(os.path.join(base_dir, self._pkg_path),
-                              os.path.join(base_dir, self._cwd))  # os.path.dirname(self._cwd)
+        if self._type == '.npz':
+            self.handle_npz(bd)
+            return
+
+        self._unpack(bd)
         if not self._is_root_node:
-            os.remove(os.path.join(base_dir, self._pkg_path))
+            if self._type != '.whl':
+                os.remove(os.path.join(bd, self._pkg_path))
+            else:
+                shutil.unpack_archive(os.path.join(bd, self._pkg_path)[:-4] + '.zip',
+                                      os.path.join(bd, self._cwd))
+                os.remove(os.path.join(bd, self._pkg_path)[:-4] + '.zip')
         # remove marked files
         for file in self._target_files:
-            self.remove_files(base_dir, file)
+            self.remove_files(bd, file)
             # os.remove(os.path.join(base_dir, file))
         for arc in self._target_archives:
-            arc.process(base_dir)
-        self._pack(base_dir)
+            arc.process(bd)
+        self._pack(bd)
+
+    def handle_npz(self, bd):
+        temp = np.load(os.path.join(bd, self._pkg_path), allow_pickle=True, encoding="latin1")
+        cmd = "np.savez(os.path.join(bd, self._pkg_path)"
+        ls = []
+        datas = []
+        for f in self._target_files:
+            ls.append(f.split('/')[-1].replace('.npy', ''))
+        count = 0
+        for data in temp.files:
+            if data not in ls:
+                # d[data] = temp[f'{data}']
+                datas.append(temp[f'{data}'])
+                cmd = cmd + f' ,{data}=datas[{count}] '
+                count += 1
+        cmd = cmd + ')'
+        temp.close()
+        os.remove(os.path.join(bd, self._pkg_path))
+        exec(cmd)
+        print()
+
+        # np.savez(os.path.join(bd, self._pkg_path))
+        # for file in temp.files:
+        #     print(temp[f'{file}'])
+
 
     def process_line(self, str):
         """
