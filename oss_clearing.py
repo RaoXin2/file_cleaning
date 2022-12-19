@@ -6,7 +6,7 @@ import zipfile
 
 import numpy as np
 
-SUPPORT_FORMAT = ['.zip', '.tar.gz', '.tar.xz', '.tar', '.npz', '.whl']
+SUPPORT_FORMAT = ['.zip', '.tar.gz', '.tar.xz', '.tar', '.npz', '.whl', '.egg']
 UNSUPPORTED_FORMAT = ['.tar.lzma']
 
 
@@ -70,6 +70,11 @@ class Archive:
                                 format='zip',
                                 root_dir=pth)
             os.rename(pth + '.zip', pth + '.whl')
+        if self._type == SUPPORT_FORMAT[6]:
+            shutil.make_archive(base_name=base_path,
+                                format='zip',
+                                root_dir=pth)
+            os.rename(pth + '.zip', pth + '.egg')
         # remove the uncompressed folder
         shutil.rmtree(pth)
 
@@ -78,10 +83,12 @@ class Archive:
             if self._pkg_path.split('.')[-1] == 'tar':
                 with tarfile.open(os.path.join(bd, self._pkg_path)) as tar:
                     tar.extractall(os.path.join(bd, self._cwd))
-            elif self._type == '.whl':
+            elif self._type == '.whl' or self._type == '.egg':
                 # print(os.path.join(bd, self._pkg_path))
                 # print(os.path.join(bd, self._pkg_path)[:-4] + '.zip')
                 os.rename(os.path.join(bd, self._pkg_path), os.path.join(bd, self._pkg_path)[:-4] + '.zip')
+                shutil.unpack_archive(os.path.join(bd, self._pkg_path)[:-4] + '.zip',
+                                      os.path.join(bd, self._cwd))
             else:
                 shutil.unpack_archive(os.path.join(bd, self._pkg_path),
                                       os.path.join(bd, self._cwd))  # os.path.dirname(self._cwd)
@@ -104,8 +111,8 @@ class Archive:
 
         self._unpack(bd)
         if not self._is_root_node:
-            if self._type != '.whl':
-                os.remove(os.path.join(bd, self._pkg_path))
+            if self._type != '.whl' or self._type != '.egg':
+                os.remove(os.path.join(bd, self._pkg_path)[:-4] + '.zip')
             else:
                 shutil.unpack_archive(os.path.join(bd, self._pkg_path)[:-4] + '.zip',
                                       os.path.join(bd, self._cwd))
@@ -217,9 +224,9 @@ def process_csv(csv_path, root_archive):
     for line in all_lines:
         spt = True
         # skip the first line
-        if line_count == 0:
-            line_count += 1
-            continue
+        # if line_count == 0:
+        #     line_count += 1
+        #     continue
         # get path from the 4th column
         pth = line.split(',')[3].strip()
         # check for unsupported type
